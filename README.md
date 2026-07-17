@@ -2,7 +2,7 @@
 
 Application web personnelle pour suivre des revenus mensuels en portage salarial : jours travaillés, chiffre d'affaires, frais de gestion, salaire France, bonus UK, titres restaurant, remboursements et net reçu.
 
-Le projet est pensé pour un usage simple. Il peut fonctionner en mode local avec `localStorage`, ou en mode cloud avec Supabase pour synchroniser les données entre plusieurs appareils après connexion.
+Le projet est pensé pour un usage simple avec synchronisation cloud. Les données sont stockées dans Supabase et liées au compte connecté.
 
 ## Fonctionnalités
 
@@ -16,10 +16,8 @@ Le projet est pensé pour un usage simple. Il peut fonctionner en mode local ave
 - Graphique de répartition annuelle des revenus
 - Composition mensuelle des revenus par catégorie
 - Notes libres par mois
-- Sauvegarde locale dans le navigateur
 - Authentification email/mot de passe avec Supabase
 - Synchronisation cloud avec Supabase Database
-- Import des données locales vers Supabase
 - Interface responsive desktop et mobile
 
 ## Stack technique
@@ -30,7 +28,6 @@ Le projet est pensé pour un usage simple. Il peut fonctionner en mode local ave
 - Tailwind CSS
 - React Hooks
 - Lucide Icons
-- localStorage
 - Supabase
 
 ## Installation locale
@@ -46,7 +43,7 @@ L'application est ensuite disponible sur :
 http://localhost:3000
 ```
 
-Sans configuration Supabase, l'application fonctionne en mode local uniquement.
+Supabase est obligatoire pour utiliser l'application. Sans les variables d'environnement Supabase, l'application affiche un message de configuration manquante.
 
 ## Configuration Supabase
 
@@ -140,7 +137,7 @@ npm run build
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 7. Cliquer sur `Deploy`.
 
-Sans ces variables, l'application fonctionne en mode local uniquement. Avec ces variables, elle utilise Supabase pour la connexion et la synchronisation.
+Ces variables sont obligatoires. Sans elles, l'application ne peut pas se connecter à Supabase.
 
 ## Accéder à l'application
 
@@ -150,7 +147,7 @@ Après le déploiement, Vercel fournit une URL du type :
 https://nom-du-projet.vercel.app
 ```
 
-Ouvrir cette URL dans le navigateur pour utiliser l'application. Si Supabase est configuré, les utilisateurs doivent se connecter et leurs données seront synchronisées dans Supabase. Sinon, les données restent enregistrées dans le `localStorage` du navigateur pour ce domaine Vercel.
+Ouvrir cette URL dans le navigateur pour utiliser l'application. Les utilisateurs doivent se connecter et leurs données seront synchronisées dans Supabase.
 
 Chaque utilisateur peut aussi forker le dépôt GitHub, le déployer dans son propre compte Vercel, puis utiliser sa propre URL.
 
@@ -175,30 +172,10 @@ En pratique :
 
 ## Stockage des données
 
-En mode local, les données sont stockées dans le navigateur de l'utilisateur :
+Les données sont stockées dans les tables Supabase et liées au compte connecté. Elles peuvent être retrouvées depuis un autre navigateur ou un autre appareil en utilisant le même compte.
 
-- `portage-income-records` : enregistrements mensuels
-- `portage-income-settings` : paramètres de calcul
-
-Important :
-
-- Les données ne sont pas synchronisées entre appareils.
-- Les données ne sont pas stockées sur Vercel.
-- Changer de navigateur ou vider les données du navigateur peut supprimer les données locales.
-- Chaque domaine a son propre espace `localStorage`.
-
-En mode Supabase, les données sont stockées dans les tables Supabase et liées au compte connecté. Elles peuvent alors être retrouvées depuis un autre navigateur ou un autre appareil.
-
-## Importer les données locales vers Supabase
-
-Si vous avez déjà utilisé l'application en mode local :
-
-1. Configurer Supabase.
-2. Redémarrer l'application.
-3. Se connecter.
-4. Cliquer sur `Importer local`.
-
-Les données présentes dans le `localStorage` du navigateur courant seront copiées dans Supabase.
+- `monthly_income_records` : enregistrements mensuels
+- `income_settings` : paramètres de calcul
 
 ## Règles de calcul
 

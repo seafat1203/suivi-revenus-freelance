@@ -32,8 +32,6 @@ import {
 } from "@/lib/calculations";
 import {
   deleteCloudIncomeRecord,
-  ensureInitialCloudRecords,
-  importLocalDataToCloud,
   loadCloudIncomeRecords,
   loadCloudIncomeSettings,
   saveCloudIncomeSettings,
@@ -44,12 +42,6 @@ import {
 } from "@/lib/cloud-storage";
 import { defaultIncomeSettings } from "@/lib/constants";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase";
-import {
-  loadIncomeRecords,
-  loadIncomeSettings,
-  saveIncomeRecords,
-  saveIncomeSettings
-} from "@/lib/storage";
 import type {
   IncomeFormValues,
   IncomeSettings,
@@ -58,7 +50,7 @@ import type {
 } from "@/types/income";
 
 const summaryYear = "2026";
-const cloudSyncEnabled = isSupabaseConfigured();
+const supabaseConfigured = isSupabaseConfigured();
 
 function getDefaultFormValues(defaultTjm: number): IncomeFormValues {
   return {
@@ -486,7 +478,19 @@ function IncomeCompositionChart({
   const legend = chartRows[0]?.categories ?? [];
 
   if (chartRows.length === 0) {
-    return null;
+    return (
+      <section className="ledger-panel p-5 md:p-6">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-clay" />
+          <h2 className="text-xl font-semibold text-ink">
+            Composition mensuelle du revenu net
+          </h2>
+        </div>
+        <p className="mt-3 text-sm text-ink/65">
+          Aucun mois enregistré pour le moment.
+        </p>
+      </section>
+    );
   }
 
   return (
@@ -1137,7 +1141,12 @@ function IncomeTable({
         </div>
       </div>
       <div className="hidden overflow-x-auto lg:block">
-        <table className="w-full border-collapse text-left text-sm">
+        {records.length === 0 ? (
+          <p className="bg-[#fbf8f0] px-5 py-8 text-sm text-ink/65 md:px-6">
+            Aucun mois enregistré pour le moment.
+          </p>
+        ) : (
+          <table className="w-full border-collapse text-left text-sm">
           <thead className="bg-[#e8dfce] text-xs uppercase text-ink/65">
             <tr>
               <th className="px-4 py-3">Mois</th>
@@ -1239,19 +1248,26 @@ function IncomeTable({
               );
             })}
           </tbody>
-        </table>
+          </table>
+        )}
       </div>
       <div className="grid gap-3 p-4 lg:hidden">
-        {sortRecordsDesc(records).map((record) => (
-          <IncomeMobileCard
-            key={record.id}
-            onDelete={onDelete}
-            onEdit={onEdit}
-            record={record}
-            records={records}
-            settings={settings}
-          />
-        ))}
+        {records.length === 0 ? (
+          <p className="text-sm text-ink/65">
+            Aucun mois enregistré pour le moment.
+          </p>
+        ) : (
+          sortRecordsDesc(records).map((record) => (
+            <IncomeMobileCard
+              key={record.id}
+              onDelete={onDelete}
+              onEdit={onEdit}
+              record={record}
+              records={records}
+              settings={settings}
+            />
+          ))
+        )}
       </div>
     </section>
   );
@@ -1399,16 +1415,14 @@ export function IncomeDashboard() {
   const [authMessage, setAuthMessage] = useState("");
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [configurationError, setConfigurationError] = useState("");
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    if (!cloudSyncEnabled) {
-      const loadedSettings = loadIncomeSettings();
-
-      setSettings(loadedSettings);
-      setSettingsFormValues(settingsToForm(loadedSettings));
-      setFormValues(getDefaultFormValues(loadedSettings.defaultTjm));
-      setRecords(loadIncomeRecords());
+    if (!supabaseConfigured) {
+      setConfigurationError(
+        "Supabase n'est pas configuré. Ajoutez NEXT_PUBLIC_SUPABASE_URL et NEXT_PUBLIC_SUPABASE_ANON_KEY."
+      );
       setIsReady(true);
       return;
     }
@@ -1460,7 +1474,7 @@ export function IncomeDashboard() {
     try {
       const [loadedSettings, loadedRecords] = await Promise.all([
         loadCloudIncomeSettings(userId),
-        ensureInitialCloudRecords(userId)
+        loadCloudIncomeRecords(userId)
       ]);
 
       setSettings(loadedSettings);
@@ -1480,10 +1494,6 @@ export function IncomeDashboard() {
 
   function commitRecords(nextRecords: MonthlyIncome[]) {
     setRecords(nextRecords);
-
-    if (!cloudSyncEnabled) {
-      saveIncomeRecords(nextRecords);
-    }
   }
 
   async function authenticate() {
@@ -1533,36 +1543,6 @@ export function IncomeDashboard() {
         signOutError instanceof Error
           ? signOutError.message
           : "Impossible de se déconnecter."
-      );
-    }
-  }
-
-  async function importLocalBackup() {
-    if (!user) {
-      return;
-    }
-
-    setSyncMessage("");
-
-    try {
-      const localRecords = loadIncomeRecords();
-      const localSettings = loadIncomeSettings();
-
-      await importLocalDataToCloud(user.id, localRecords, localSettings);
-      const [nextSettings, nextRecords] = await Promise.all([
-        loadCloudIncomeSettings(user.id),
-        loadCloudIncomeRecords(user.id)
-      ]);
-
-      setSettings(nextSettings);
-      setSettingsFormValues(settingsToForm(nextSettings));
-      setRecords(nextRecords);
-      setSyncMessage("Données locales importées dans le cloud.");
-    } catch (importError) {
-      setSyncMessage(
-        importError instanceof Error
-          ? importError.message
-          : "Impossible d'importer les données locales."
       );
     }
   }
@@ -1634,18 +1614,20 @@ export function IncomeDashboard() {
     setSettingsFormValues(settingsToForm(nextSettings));
     setSettingsError("");
 
-    if (cloudSyncEnabled && user) {
-      try {
-        await saveCloudIncomeSettings(user.id, nextSettings);
-      } catch (settingsSaveError) {
-        setSettingsError(
-          settingsSaveError instanceof Error
-            ? settingsSaveError.message
-            : "Impossible d'enregistrer les paramètres."
-        );
-      }
-    } else {
-      saveIncomeSettings(nextSettings);
+    if (!user) {
+      setSettingsError("Vous devez être connecté pour enregistrer les paramètres.");
+      return;
+    }
+
+    try {
+      await saveCloudIncomeSettings(user.id, nextSettings);
+    } catch (settingsSaveError) {
+      setSettingsError(
+        settingsSaveError instanceof Error
+          ? settingsSaveError.message
+          : "Impossible d'enregistrer les paramètres."
+      );
+      return;
     }
 
     if (!editingId) {
@@ -1725,17 +1707,20 @@ export function IncomeDashboard() {
 
     commitRecords(nextRecords);
 
-    if (cloudSyncEnabled && user) {
-      try {
-        await upsertCloudIncomeRecord(user.id, nextRecord);
-      } catch (recordSaveError) {
-        setError(
-          recordSaveError instanceof Error
-            ? recordSaveError.message
-            : "Impossible d'enregistrer le mois."
-        );
-        return;
-      }
+    if (!user) {
+      setError("Vous devez être connecté pour enregistrer un mois.");
+      return;
+    }
+
+    try {
+      await upsertCloudIncomeRecord(user.id, nextRecord);
+    } catch (recordSaveError) {
+      setError(
+        recordSaveError instanceof Error
+          ? recordSaveError.message
+          : "Impossible d'enregistrer le mois."
+      );
+      return;
     }
 
     resetForm();
@@ -1758,16 +1743,19 @@ export function IncomeDashboard() {
     const nextRecords = records.filter((item) => item.id !== record.id);
     commitRecords(nextRecords);
 
-    if (cloudSyncEnabled && user) {
-      try {
-        await deleteCloudIncomeRecord(user.id, record.id);
-      } catch (deleteError) {
-        setSyncMessage(
-          deleteError instanceof Error
-            ? deleteError.message
-            : "Impossible de supprimer le mois."
-        );
-      }
+    if (!user) {
+      setSyncMessage("Vous devez être connecté pour supprimer un mois.");
+      return;
+    }
+
+    try {
+      await deleteCloudIncomeRecord(user.id, record.id);
+    } catch (deleteError) {
+      setSyncMessage(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Impossible de supprimer le mois."
+      );
     }
 
     if (editingId === record.id) {
@@ -1779,13 +1767,32 @@ export function IncomeDashboard() {
     return (
       <main className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-5 text-ink">
         <p className="border border-ink/15 bg-[#fbf8f0] px-5 py-3 text-sm font-medium">
-          Chargement des données locales…
+          Chargement des données…
         </p>
       </main>
     );
   }
 
-  if (cloudSyncEnabled && !user) {
+  if (configurationError) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-3xl items-center px-4 py-10 text-ink">
+        <section className="ledger-panel w-full p-6 md:p-8">
+          <p className="mb-3 inline-flex items-center gap-2 border border-clay/30 bg-[#f2dfcf] px-3 py-1 text-sm font-semibold text-clay">
+            <WalletCards className="h-4 w-4" />
+            Configuration requise
+          </p>
+          <h1 className="text-3xl font-semibold md:text-5xl">
+            Supabase doit être configuré
+          </h1>
+          <p className="mt-4 text-base leading-7 text-ink/70">
+            {configurationError}
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!user) {
     return (
       <AuthPanel
         email={authEmail}
@@ -1825,44 +1832,22 @@ export function IncomeDashboard() {
             values={settingsFormValues}
           />
           <div className="border border-ink/15 bg-[#f8f5ec] p-4 text-sm text-ink">
-            {cloudSyncEnabled && user ? (
-              <>
-                <p className="font-semibold text-moss">Synchronisation active</p>
-                <p className="mt-1 break-all text-ink/65">{user.email}</p>
-                {syncMessage ? (
-                  <p className="mt-3 text-sm font-medium text-clay">
-                    {syncMessage}
-                  </p>
-                ) : null}
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    className="inline-flex items-center gap-2 border border-ink/20 px-3 py-2 text-sm font-semibold text-ink transition hover:border-moss hover:text-moss"
-                    onClick={importLocalBackup}
-                    style={{ borderRadius: 6 }}
-                    type="button"
-                  >
-                    <Save className="h-4 w-4" />
-                    Importer local
-                  </button>
-                  <button
-                    className="inline-flex items-center gap-2 border border-clay/35 px-3 py-2 text-sm font-semibold text-clay transition hover:bg-clay hover:text-paper"
-                    onClick={signOut}
-                    style={{ borderRadius: 6 }}
-                    type="button"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Déconnexion
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="font-semibold text-ink">Mode local</p>
-                <p className="mt-1 text-ink/65">
-                  Ajoutez Supabase pour synchroniser entre appareils.
-                </p>
-              </>
-            )}
+            <p className="font-semibold text-moss">Synchronisation active</p>
+            <p className="mt-1 break-all text-ink/65">{user.email}</p>
+            {syncMessage ? (
+              <p className="mt-3 text-sm font-medium text-clay">
+                {syncMessage}
+              </p>
+            ) : null}
+            <button
+              className="mt-4 inline-flex items-center gap-2 border border-clay/35 px-3 py-2 text-sm font-semibold text-clay transition hover:bg-clay hover:text-paper"
+              onClick={signOut}
+              style={{ borderRadius: 6 }}
+              type="button"
+            >
+              <LogOut className="h-4 w-4" />
+              Déconnexion
+            </button>
           </div>
         </div>
       </header>

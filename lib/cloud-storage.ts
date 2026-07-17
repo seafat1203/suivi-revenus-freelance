@@ -1,6 +1,6 @@
 "use client";
 
-import { defaultIncomeSettings, initialMonthlyIncome } from "@/lib/constants";
+import { defaultIncomeSettings } from "@/lib/constants";
 import { getSupabaseClient } from "@/lib/supabase";
 import type { IncomeSettings, MonthlyIncome } from "@/types/income";
 
@@ -243,42 +243,4 @@ export async function deleteCloudIncomeRecord(userId: string, recordId: string) 
   if (error) {
     throw error;
   }
-}
-
-export async function importLocalDataToCloud(
-  userId: string,
-  records: MonthlyIncome[],
-  settings: IncomeSettings
-) {
-  const supabase = getSupabaseClient();
-
-  if (!supabase) {
-    throw new Error("Supabase is not configured.");
-  }
-
-  await saveCloudIncomeSettings(userId, settings);
-
-  if (records.length === 0) {
-    return;
-  }
-
-  const { error } = await supabase
-    .from("monthly_income_records")
-    .upsert(records.map((record) => toMonthlyIncomeRow(record, userId)));
-
-  if (error) {
-    throw error;
-  }
-}
-
-export async function ensureInitialCloudRecords(userId: string) {
-  const existingRecords = await loadCloudIncomeRecords(userId);
-
-  if (existingRecords.length > 0) {
-    return existingRecords;
-  }
-
-  await importLocalDataToCloud(userId, initialMonthlyIncome, defaultIncomeSettings);
-
-  return initialMonthlyIncome;
 }
