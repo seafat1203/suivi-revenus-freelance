@@ -154,6 +154,25 @@ Ouvrir cette URL dans le navigateur pour utiliser l'application. Si Supabase est
 
 Chaque utilisateur peut aussi forker le dépôt GitHub, le déployer dans son propre compte Vercel, puis utiliser sa propre URL.
 
+## Confidentialité et modes d'utilisation
+
+Pour des données personnelles ou financières réelles, il est recommandé de forker ce dépôt et de créer votre propre projet Supabase ainsi que votre propre projet Vercel.
+
+Si vous utilisez une instance déployée par quelqu'un d'autre, vos données seront stockées dans le projet Supabase de cette personne. L'administrateur du projet Supabase peut voir :
+
+- votre email de compte
+- votre identifiant utilisateur
+- vos enregistrements mensuels
+- vos paramètres de calcul
+- vos notes
+
+L'administrateur ne peut pas voir votre mot de passe en clair. Supabase stocke les mots de passe de manière sécurisée, sous forme non lisible.
+
+En pratique :
+
+- Pour tester rapidement, vous pouvez utiliser une instance existante si vous acceptez que l'administrateur puisse voir les données saisies.
+- Pour une utilisation personnelle ou confidentielle, fork du dépôt + Supabase personnel + Vercel personnel est l'option recommandée.
+
 ## Stockage des données
 
 En mode local, les données sont stockées dans le navigateur de l'utilisateur :
