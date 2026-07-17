@@ -7,6 +7,7 @@ import {
   CircleDollarSign,
   Edit3,
   FilePenLine,
+  LogOut,
   Landmark,
   Plus,
   ReceiptText,
@@ -18,6 +19,7 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import {
   calculateActualReceived,
   calculateManagementFee,
@@ -28,7 +30,20 @@ import {
   formatOptionalCurrency,
   sortRecordsDesc
 } from "@/lib/calculations";
+import {
+  deleteCloudIncomeRecord,
+  ensureInitialCloudRecords,
+  importLocalDataToCloud,
+  loadCloudIncomeRecords,
+  loadCloudIncomeSettings,
+  saveCloudIncomeSettings,
+  signInWithEmailAndPassword,
+  signOutFromCloud,
+  signUpWithEmailAndPassword,
+  upsertCloudIncomeRecord
+} from "@/lib/cloud-storage";
 import { defaultIncomeSettings } from "@/lib/constants";
+import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase";
 import {
   loadIncomeRecords,
   loadIncomeSettings,
@@ -43,6 +58,7 @@ import type {
 } from "@/types/income";
 
 const summaryYear = "2026";
+const cloudSyncEnabled = isSupabaseConfigured();
 
 function getDefaultFormValues(defaultTjm: number): IncomeFormValues {
   return {
@@ -290,6 +306,112 @@ function SettingsPanel({
         Enregistrer
       </button>
     </form>
+  );
+}
+
+function AuthPanel({
+  email,
+  password,
+  mode,
+  error,
+  message,
+  isLoading,
+  onEmailChange,
+  onPasswordChange,
+  onModeChange,
+  onSubmit
+}: {
+  email: string;
+  password: string;
+  mode: "signIn" | "signUp";
+  error: string;
+  message: string;
+  isLoading: boolean;
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onModeChange: (value: "signIn" | "signUp") => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <main className="mx-auto flex min-h-screen max-w-3xl items-center px-4 py-10 text-ink">
+      <section className="ledger-panel w-full p-6 md:p-8">
+        <p className="mb-3 inline-flex items-center gap-2 border border-clay/30 bg-[#f2dfcf] px-3 py-1 text-sm font-semibold text-clay">
+          <WalletCards className="h-4 w-4" />
+          Synchronisation cloud
+        </p>
+        <h1 className="text-3xl font-semibold md:text-5xl">
+          Connectez-vous pour synchroniser vos données
+        </h1>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/68 md:text-base">
+          Vos mois, paramètres et notes seront stockés dans Supabase et
+          accessibles depuis vos différents appareils.
+        </p>
+
+        <form
+          className="mt-8 grid gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmit();
+          }}
+        >
+          <label className="space-y-2">
+            <span className="field-label">Email</span>
+            <input
+              className="field-input"
+              onChange={(event) => onEmailChange(event.target.value)}
+              placeholder="vous@example.com"
+              type="email"
+              value={email}
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="field-label">Mot de passe</span>
+            <input
+              className="field-input"
+              minLength={6}
+              onChange={(event) => onPasswordChange(event.target.value)}
+              placeholder="Au moins 6 caractères"
+              type="password"
+              value={password}
+            />
+          </label>
+
+          {error ? (
+            <p className="border border-clay/30 bg-[#fbf1e7] px-3 py-2 text-sm font-medium text-clay">
+              {error}
+            </p>
+          ) : null}
+          {message ? (
+            <p className="border border-moss/25 bg-[#edf0e4] px-3 py-2 text-sm font-medium text-moss">
+              {message}
+            </p>
+          ) : null}
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              className="inline-flex items-center gap-2 bg-ink px-4 py-2.5 text-sm font-semibold text-paper transition hover:bg-moss disabled:opacity-60"
+              disabled={isLoading}
+              style={{ borderRadius: 6 }}
+              type="submit"
+            >
+              <Save className="h-4 w-4" />
+              {mode === "signIn" ? "Se connecter" : "Créer un compte"}
+            </button>
+            <button
+              className="inline-flex items-center gap-2 border border-ink/20 px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-clay hover:text-clay"
+              disabled={isLoading}
+              onClick={() => onModeChange(mode === "signIn" ? "signUp" : "signIn")}
+              style={{ borderRadius: 6 }}
+              type="button"
+            >
+              {mode === "signIn"
+                ? "Créer un nouveau compte"
+                : "J'ai déjà un compte"}
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
   );
 }
 
@@ -1269,21 +1391,180 @@ export function IncomeDashboard() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [settingsError, setSettingsError] = useState("");
+  const [user, setUser] = useState<User | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"signIn" | "signUp">("signIn");
+  const [authError, setAuthError] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const loadedSettings = loadIncomeSettings();
+    if (!cloudSyncEnabled) {
+      const loadedSettings = loadIncomeSettings();
 
-    setSettings(loadedSettings);
-    setSettingsFormValues(settingsToForm(loadedSettings));
-    setFormValues(getDefaultFormValues(loadedSettings.defaultTjm));
-    setRecords(loadIncomeRecords());
-    setIsReady(true);
+      setSettings(loadedSettings);
+      setSettingsFormValues(settingsToForm(loadedSettings));
+      setFormValues(getDefaultFormValues(loadedSettings.defaultTjm));
+      setRecords(loadIncomeRecords());
+      setIsReady(true);
+      return;
+    }
+
+    const supabase = getSupabaseClient();
+
+    if (!supabase) {
+      setIsReady(true);
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      const sessionUser = data.session?.user ?? null;
+
+      setUser(sessionUser);
+
+      if (sessionUser) {
+        void loadCloudData(sessionUser.id);
+      } else {
+        setIsReady(true);
+      }
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        const sessionUser = session?.user ?? null;
+
+        setUser(sessionUser);
+
+        if (sessionUser) {
+          void loadCloudData(sessionUser.id);
+        } else {
+          setRecords([]);
+          setSettings(defaultIncomeSettings);
+          setSettingsFormValues(settingsToForm(defaultIncomeSettings));
+          setFormValues(getDefaultFormValues(defaultIncomeSettings.defaultTjm));
+          setIsReady(true);
+        }
+      }
+    );
+
+    return () => listener.subscription.unsubscribe();
   }, []);
+
+  async function loadCloudData(userId: string) {
+    setIsReady(false);
+    setSyncMessage("");
+
+    try {
+      const [loadedSettings, loadedRecords] = await Promise.all([
+        loadCloudIncomeSettings(userId),
+        ensureInitialCloudRecords(userId)
+      ]);
+
+      setSettings(loadedSettings);
+      setSettingsFormValues(settingsToForm(loadedSettings));
+      setFormValues(getDefaultFormValues(loadedSettings.defaultTjm));
+      setRecords(loadedRecords);
+    } catch (cloudError) {
+      setSyncMessage(
+        cloudError instanceof Error
+          ? cloudError.message
+          : "Erreur de synchronisation Supabase."
+      );
+    } finally {
+      setIsReady(true);
+    }
+  }
 
   function commitRecords(nextRecords: MonthlyIncome[]) {
     setRecords(nextRecords);
-    saveIncomeRecords(nextRecords);
+
+    if (!cloudSyncEnabled) {
+      saveIncomeRecords(nextRecords);
+    }
+  }
+
+  async function authenticate() {
+    setAuthError("");
+    setAuthMessage("");
+
+    if (!authEmail.trim() || !authPassword) {
+      setAuthError("Email et mot de passe sont obligatoires.");
+      return;
+    }
+
+    setIsAuthLoading(true);
+
+    try {
+      const session =
+        authMode === "signIn"
+          ? await signInWithEmailAndPassword(authEmail.trim(), authPassword)
+          : await signUpWithEmailAndPassword(authEmail.trim(), authPassword);
+
+      if (session?.user) {
+        setUser(session.user);
+        await loadCloudData(session.user.id);
+      } else {
+        setAuthMessage(
+          "Compte créé. Vérifiez votre email si Supabase demande une confirmation."
+        );
+      }
+    } catch (authErrorValue) {
+      setAuthError(
+        authErrorValue instanceof Error
+          ? authErrorValue.message
+          : "Impossible de se connecter."
+      );
+    } finally {
+      setIsAuthLoading(false);
+    }
+  }
+
+  async function signOut() {
+    setSyncMessage("");
+
+    try {
+      await signOutFromCloud();
+      setUser(null);
+    } catch (signOutError) {
+      setSyncMessage(
+        signOutError instanceof Error
+          ? signOutError.message
+          : "Impossible de se déconnecter."
+      );
+    }
+  }
+
+  async function importLocalBackup() {
+    if (!user) {
+      return;
+    }
+
+    setSyncMessage("");
+
+    try {
+      const localRecords = loadIncomeRecords();
+      const localSettings = loadIncomeSettings();
+
+      await importLocalDataToCloud(user.id, localRecords, localSettings);
+      const [nextSettings, nextRecords] = await Promise.all([
+        loadCloudIncomeSettings(user.id),
+        loadCloudIncomeRecords(user.id)
+      ]);
+
+      setSettings(nextSettings);
+      setSettingsFormValues(settingsToForm(nextSettings));
+      setRecords(nextRecords);
+      setSyncMessage("Données locales importées dans le cloud.");
+    } catch (importError) {
+      setSyncMessage(
+        importError instanceof Error
+          ? importError.message
+          : "Impossible d'importer les données locales."
+      );
+    }
   }
 
   function updateFormValue(field: keyof IncomeFormValues, value: string) {
@@ -1333,7 +1614,7 @@ export function IncomeDashboard() {
     return "";
   }
 
-  function saveSettingsForm() {
+  async function saveSettingsForm() {
     const parsed = parseSettingsForm(settingsFormValues);
     const validationError = validateSettingsForm(parsed);
 
@@ -1351,8 +1632,21 @@ export function IncomeDashboard() {
 
     setSettings(nextSettings);
     setSettingsFormValues(settingsToForm(nextSettings));
-    saveIncomeSettings(nextSettings);
     setSettingsError("");
+
+    if (cloudSyncEnabled && user) {
+      try {
+        await saveCloudIncomeSettings(user.id, nextSettings);
+      } catch (settingsSaveError) {
+        setSettingsError(
+          settingsSaveError instanceof Error
+            ? settingsSaveError.message
+            : "Impossible d'enregistrer les paramètres."
+        );
+      }
+    } else {
+      saveIncomeSettings(nextSettings);
+    }
 
     if (!editingId) {
       setFormValues((currentValues) => ({
@@ -1401,7 +1695,7 @@ export function IncomeDashboard() {
     return "";
   }
 
-  function saveForm() {
+  async function saveForm() {
     const parsed = parseForm(formValues);
     const validationError = validateForm(parsed);
 
@@ -1430,6 +1724,20 @@ export function IncomeDashboard() {
       : [...records, nextRecord];
 
     commitRecords(nextRecords);
+
+    if (cloudSyncEnabled && user) {
+      try {
+        await upsertCloudIncomeRecord(user.id, nextRecord);
+      } catch (recordSaveError) {
+        setError(
+          recordSaveError instanceof Error
+            ? recordSaveError.message
+            : "Impossible d'enregistrer le mois."
+        );
+        return;
+      }
+    }
+
     resetForm();
   }
 
@@ -1440,7 +1748,7 @@ export function IncomeDashboard() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function deleteRecord(record: MonthlyIncome) {
+  async function deleteRecord(record: MonthlyIncome) {
     const confirmed = window.confirm(`Supprimer l'enregistrement ${record.month} ?`);
 
     if (!confirmed) {
@@ -1449,6 +1757,18 @@ export function IncomeDashboard() {
 
     const nextRecords = records.filter((item) => item.id !== record.id);
     commitRecords(nextRecords);
+
+    if (cloudSyncEnabled && user) {
+      try {
+        await deleteCloudIncomeRecord(user.id, record.id);
+      } catch (deleteError) {
+        setSyncMessage(
+          deleteError instanceof Error
+            ? deleteError.message
+            : "Impossible de supprimer le mois."
+        );
+      }
+    }
 
     if (editingId === record.id) {
       resetForm();
@@ -1462,6 +1782,23 @@ export function IncomeDashboard() {
           Chargement des données locales…
         </p>
       </main>
+    );
+  }
+
+  if (cloudSyncEnabled && !user) {
+    return (
+      <AuthPanel
+        email={authEmail}
+        error={authError}
+        isLoading={isAuthLoading}
+        message={authMessage}
+        mode={authMode}
+        onEmailChange={setAuthEmail}
+        onModeChange={setAuthMode}
+        onPasswordChange={setAuthPassword}
+        onSubmit={authenticate}
+        password={authPassword}
+      />
     );
   }
 
@@ -1480,12 +1817,54 @@ export function IncomeDashboard() {
             Suivez les jours travaillés, le chiffre d&apos;affaires et le net reçu chaque mois.
           </p>
         </div>
-        <SettingsPanel
-          error={settingsError}
-          onChange={updateSettingsFormValue}
-          onSubmit={saveSettingsForm}
-          values={settingsFormValues}
-        />
+        <div className="grid gap-3">
+          <SettingsPanel
+            error={settingsError}
+            onChange={updateSettingsFormValue}
+            onSubmit={saveSettingsForm}
+            values={settingsFormValues}
+          />
+          <div className="border border-ink/15 bg-[#f8f5ec] p-4 text-sm text-ink">
+            {cloudSyncEnabled && user ? (
+              <>
+                <p className="font-semibold text-moss">Synchronisation active</p>
+                <p className="mt-1 break-all text-ink/65">{user.email}</p>
+                {syncMessage ? (
+                  <p className="mt-3 text-sm font-medium text-clay">
+                    {syncMessage}
+                  </p>
+                ) : null}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    className="inline-flex items-center gap-2 border border-ink/20 px-3 py-2 text-sm font-semibold text-ink transition hover:border-moss hover:text-moss"
+                    onClick={importLocalBackup}
+                    style={{ borderRadius: 6 }}
+                    type="button"
+                  >
+                    <Save className="h-4 w-4" />
+                    Importer local
+                  </button>
+                  <button
+                    className="inline-flex items-center gap-2 border border-clay/35 px-3 py-2 text-sm font-semibold text-clay transition hover:bg-clay hover:text-paper"
+                    onClick={signOut}
+                    style={{ borderRadius: 6 }}
+                    type="button"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Déconnexion
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold text-ink">Mode local</p>
+                <p className="mt-1 text-ink/65">
+                  Ajoutez Supabase pour synchroniser entre appareils.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
       </header>
 
       <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase text-ink/55">
