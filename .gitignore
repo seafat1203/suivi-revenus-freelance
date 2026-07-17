@@ -1,14 +1,41 @@
-.next/
+# Dependencies
 node_modules/
+
+# Next.js
+.next/
 out/
+
+# Production / build output
 dist/
 build/
+
+# Vercel
 .vercel/
+
+# TypeScript
 *.tsbuildinfo
+
+# Environment files
 .env*
 !.env.example
-.DS_Store
+
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Tests and coverage
+coverage/
+playwright-report/
+test-results/
+
+# Caches
+.turbo/
+.cache/
+.npm/
+
+# System / editor files
+.DS_Store
+.idea/
+.vscode/

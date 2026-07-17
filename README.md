@@ -42,6 +42,31 @@ L'application est ensuite disponible sur :
 http://localhost:3000
 ```
 
+## Publier le projet sur GitHub
+
+Depuis le dossier du projet :
+
+```bash
+git status
+git add -A
+git commit -m "Initial portage income tracker"
+```
+
+Créer ensuite un dépôt GitHub vide, puis ajouter le dépôt distant :
+
+```bash
+git remote add origin https://github.com/VOTRE_COMPTE/NOM_DU_DEPOT.git
+git branch -M main
+git push -u origin main
+```
+
+Si vous utilisez GitHub CLI :
+
+```bash
+gh auth login
+gh repo create NOM_DU_DEPOT --public --source=. --remote=origin --push
+```
+
 ## Scripts utiles
 
 ```bash
@@ -54,12 +79,29 @@ npm run build
 ## Déploiement sur Vercel
 
 1. Pousser le projet sur GitHub.
-2. Créer un nouveau projet dans Vercel.
-3. Importer le dépôt GitHub.
-4. Garder les paramètres Next.js par défaut.
-5. Déployer.
+2. Aller sur [vercel.com](https://vercel.com).
+3. Cliquer sur `Add New...` puis `Project`.
+4. Importer le dépôt GitHub.
+5. Garder les paramètres par défaut :
+   - Framework Preset : `Next.js`
+   - Build Command : `npm run build`
+   - Install Command : `npm install`
+   - Output Directory : laisser vide
+6. Cliquer sur `Deploy`.
 
 Aucune variable d'environnement n'est nécessaire pour cette première version.
+
+## Accéder à l'application
+
+Après le déploiement, Vercel fournit une URL du type :
+
+```text
+https://nom-du-projet.vercel.app
+```
+
+Ouvrir cette URL dans le navigateur pour utiliser l'application. Les données saisies seront enregistrées dans le `localStorage` du navigateur pour ce domaine Vercel.
+
+Chaque utilisateur peut aussi forker le dépôt GitHub, le déployer dans son propre compte Vercel, puis utiliser sa propre URL.
 
 ## Stockage des données
 
