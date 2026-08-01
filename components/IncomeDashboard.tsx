@@ -9,6 +9,7 @@ import {
   FilePenLine,
   LogOut,
   Landmark,
+  Languages,
   Plus,
   ReceiptText,
   RotateCcw,
@@ -18,7 +19,7 @@ import {
   WalletCards,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import {
   calculateActualReceived,
@@ -52,6 +53,125 @@ import type {
 const summaryYear = "2026";
 const supabaseConfigured = isSupabaseConfigured();
 
+type Language = "fr" | "zh";
+
+const zh: Record<string, string> = {
+  "Paramètres": "设置",
+  "TJM par défaut": "默认日费率",
+  "Frais de gestion %": "管理费率 %",
+  "Titre resto €/jour": "餐券 €/天",
+  "Enregistrer": "保存",
+  "Synchronisation cloud": "云端同步",
+  "Connectez-vous pour synchroniser vos données": "登录后同步您的数据",
+  "Vos mois, paramètres et notes seront stockés dans Supabase et accessibles depuis vos différents appareils.": "您的月度记录、设置和备注将存储在 Supabase 中，可从不同设备访问。",
+  "Email": "邮箱",
+  "Mot de passe": "密码",
+  "Au moins 6 caractères": "至少 6 个字符",
+  "Se connecter": "登录",
+  "Créer un compte": "创建账户",
+  "Créer un nouveau compte": "注册新账户",
+  "J'ai déjà un compte": "我已有账户",
+  "Composition mensuelle du revenu net": "月度到手收入构成",
+  "Aucun mois enregistré pour le moment.": "暂无月度记录。",
+  "Salaire France": "法国工资",
+  "Bonus UK": "英国奖金",
+  "Remb.": "报销",
+  "Remboursements": "报销",
+  "Titres resto": "餐券",
+  "Non renseigné": "未填写",
+  "Net reçu": "实际到账",
+  "Données incomplètes": "数据不完整",
+  "jours travaillés": "工作天数",
+  "Total des jours travaillés saisis": "已录入的工作天数总计",
+  "Chiffre d'affaires cumulé": "累计营业额",
+  "Jours travaillés × TJM du mois": "工作天数 × 当月日费率",
+  "Frais de gestion cumulés": "累计管理费",
+  "calculé automatiquement": "自动计算",
+  "Revenus salariaux saisis": "已录入工资收入",
+  "Salaire France et bonus UK renseignés": "已填写的法国工资和英国奖金",
+  "Remboursements saisis": "已录入报销",
+  "Remboursements hors titres resto renseignés": "已填写的餐券以外报销",
+  "Net reçu complet": "完整到账收入",
+  "Mois où salaire, bonus et remboursements sont complets": "工资、奖金和报销均已完整填写的月份",
+  "Répartition des revenus": "收入分布",
+  "Total": "总计",
+  "Jours travaillés le mois précédent": "上月工作天数",
+  "Mois précédent manquant": "缺少上月记录",
+  "Chiffre d'affaires": "营业额",
+  "Frais de gestion": "管理费",
+  "Revenus salariaux": "工资收入",
+  "Calcul en temps réel": "实时计算",
+  "Ajouter un mois": "添加月度记录",
+  "Modifier le mois": "修改月度记录",
+  "Modification en cours": "正在修改",
+  "Nouvel enregistrement": "新记录",
+  "Annuler": "取消",
+  "Mois": "月份",
+  "Jours travaillés": "工作天数",
+  "TJM": "日费率",
+  "Vide si non renseigné": "未填写时留空",
+  "Hors titres resto": "不含餐券",
+  "Note": "备注",
+  "Ex. beaucoup de jours fériés, congés, aucun congé": "例：节假日较多、休假、未休假",
+  "Réinitialiser": "重置",
+  "Enregistrements mensuels": "月度记录",
+  "Jours": "天数",
+  "Frais": "管理费",
+  "Salaire FR": "法国工资",
+  "Actions": "操作",
+  "Modifier": "修改",
+  "Supprimer": "删除",
+  "Chargement des données…": "正在加载数据…",
+  "Configuration requise": "需要配置",
+  "Supabase doit être configuré": "需要配置 Supabase",
+  "Carnet personnel de portage": "个人自由职业账本",
+  "Suivi des revenus en portage": "自由职业收入记账",
+  "Suivez les jours travaillés, le chiffre d'affaires et le net reçu chaque mois.": "记录每月工作天数、营业额和实际到账收入。",
+  "Synchronisation active": "云端同步已开启",
+  "Déconnexion": "退出登录",
+  "Vue annuelle": "年度概览"
+};
+
+type I18nContextValue = {
+  language: Language;
+  locale: string;
+  setLanguage: (language: Language) => void;
+  t: (text: string) => string;
+};
+
+const I18nContext = createContext<I18nContextValue>({
+  language: "fr",
+  locale: "fr-FR",
+  setLanguage: () => undefined,
+  t: (text) => text
+});
+
+function useI18n() {
+  return useContext(I18nContext);
+}
+
+function LanguageSwitcher() {
+  const { language, setLanguage } = useI18n();
+
+  return (
+    <div className="inline-flex items-center gap-1 border border-ink/15 bg-[#f8f5ec] p-1" style={{ borderRadius: 7 }}>
+      <Languages className="mx-2 h-4 w-4 text-clay" aria-hidden="true" />
+      {(["zh", "fr"] as const).map((option) => (
+        <button
+          aria-pressed={language === option}
+          className={`px-3 py-1.5 text-sm font-semibold transition ${language === option ? "bg-ink text-paper" : "text-ink/65 hover:text-ink"}`}
+          key={option}
+          onClick={() => setLanguage(option)}
+          style={{ borderRadius: 5 }}
+          type="button"
+        >
+          {option === "zh" ? "中文" : "Français"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function getDefaultFormValues(defaultTjm: number): IncomeFormValues {
   return {
     month: "",
@@ -76,8 +196,8 @@ function settingsToForm(settings: IncomeSettings): IncomeSettingsFormValues {
   };
 }
 
-function formatPercent(rate: number) {
-  return `${new Intl.NumberFormat("fr-FR", {
+function formatPercent(rate: number, locale = "fr-FR") {
+  return `${new Intl.NumberFormat(locale, {
     maximumFractionDigits: 2
   }).format(rate * 100)}%`;
 }
@@ -180,16 +300,17 @@ function ActualReceivedValue({
   complete: boolean;
   amount: number | null;
 }) {
+  const { t } = useI18n();
   if (!complete || amount === null) {
-    return <span className="font-medium text-clay">Données incomplètes</span>;
+    return <span className="font-medium text-clay">{t("Données incomplètes")}</span>;
   }
 
   return <span className="font-bold text-moss">{formatCurrency(amount)}</span>;
 }
 
-function formatMonthLabel(month: string) {
+function formatMonthLabel(month: string, locale: string) {
   const [year, monthNumber] = month.split("-");
-  return new Intl.DateTimeFormat("fr-FR", {
+  return new Intl.DateTimeFormat(locale, {
     month: "long",
     year: "numeric"
   }).format(new Date(Number(year), Number(monthNumber) - 1, 1));
@@ -237,6 +358,7 @@ function SettingsPanel({
   onChange: (field: keyof IncomeSettingsFormValues, value: string) => void;
   onSubmit: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <form
       className="border border-ink/15 bg-[#ebe4d7] p-4 text-sm text-ink md:min-w-80"
@@ -247,11 +369,11 @@ function SettingsPanel({
     >
       <div className="mb-3 flex items-center gap-2 font-semibold">
         <SlidersHorizontal className="h-4 w-4 text-clay" />
-        Paramètres
+        {t("Paramètres")}
       </div>
       <div className="grid gap-3">
         <label className="grid grid-cols-[1fr_116px] items-center gap-3">
-          <span className="text-ink/65">TJM par défaut</span>
+          <span className="text-ink/65">{t("TJM par défaut")}</span>
           <input
             className="field-input px-2 py-1.5 text-right text-sm font-semibold"
             min="0.01"
@@ -262,7 +384,7 @@ function SettingsPanel({
           />
         </label>
         <label className="grid grid-cols-[1fr_116px] items-center gap-3">
-          <span className="text-ink/65">Frais de gestion %</span>
+          <span className="text-ink/65">{t("Frais de gestion %")}</span>
           <input
             className="field-input px-2 py-1.5 text-right text-sm font-semibold"
             min="0"
@@ -275,7 +397,7 @@ function SettingsPanel({
           />
         </label>
         <label className="grid grid-cols-[1fr_116px] items-center gap-3">
-          <span className="text-ink/65">Titre resto €/jour</span>
+          <span className="text-ink/65">{t("Titre resto €/jour")}</span>
           <input
             className="field-input px-2 py-1.5 text-right text-sm font-semibold"
             min="0"
@@ -295,7 +417,7 @@ function SettingsPanel({
         type="submit"
       >
         <Save className="h-4 w-4" />
-        Enregistrer
+        {t("Enregistrer")}
       </button>
     </form>
   );
@@ -324,19 +446,20 @@ function AuthPanel({
   onModeChange: (value: "signIn" | "signUp") => void;
   onSubmit: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl items-center px-4 py-10 text-ink">
-      <section className="ledger-panel w-full p-6 md:p-8">
+      <section className="ledger-panel relative w-full p-6 md:p-8">
+        <div className="mb-5 flex justify-end"><LanguageSwitcher /></div>
         <p className="mb-3 inline-flex items-center gap-2 border border-clay/30 bg-[#f2dfcf] px-3 py-1 text-sm font-semibold text-clay">
           <WalletCards className="h-4 w-4" />
-          Synchronisation cloud
+          {t("Synchronisation cloud")}
         </p>
         <h1 className="text-3xl font-semibold md:text-5xl">
-          Connectez-vous pour synchroniser vos données
+          {t("Connectez-vous pour synchroniser vos données")}
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/68 md:text-base">
-          Vos mois, paramètres et notes seront stockés dans Supabase et
-          accessibles depuis vos différents appareils.
+          {t("Vos mois, paramètres et notes seront stockés dans Supabase et accessibles depuis vos différents appareils.")}
         </p>
 
         <form
@@ -347,7 +470,7 @@ function AuthPanel({
           }}
         >
           <label className="space-y-2">
-            <span className="field-label">Email</span>
+            <span className="field-label">{t("Email")}</span>
             <input
               className="field-input"
               onChange={(event) => onEmailChange(event.target.value)}
@@ -357,12 +480,12 @@ function AuthPanel({
             />
           </label>
           <label className="space-y-2">
-            <span className="field-label">Mot de passe</span>
+            <span className="field-label">{t("Mot de passe")}</span>
             <input
               className="field-input"
               minLength={6}
               onChange={(event) => onPasswordChange(event.target.value)}
-              placeholder="Au moins 6 caractères"
+              placeholder={t("Au moins 6 caractères")}
               type="password"
               value={password}
             />
@@ -387,7 +510,7 @@ function AuthPanel({
               type="submit"
             >
               <Save className="h-4 w-4" />
-              {mode === "signIn" ? "Se connecter" : "Créer un compte"}
+              {mode === "signIn" ? t("Se connecter") : t("Créer un compte")}
             </button>
             <button
               className="inline-flex items-center gap-2 border border-ink/20 px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-clay hover:text-clay"
@@ -397,8 +520,8 @@ function AuthPanel({
               type="button"
             >
               {mode === "signIn"
-                ? "Créer un nouveau compte"
-                : "J'ai déjà un compte"}
+                ? t("Créer un nouveau compte")
+                : t("J'ai déjà un compte")}
             </button>
           </div>
         </form>
@@ -414,6 +537,7 @@ function IncomeCompositionChart({
   records: MonthlyIncome[];
   settings: IncomeSettings;
 }) {
+  const { locale, t } = useI18n();
   const sortedRecords = [...records].sort((a, b) => a.month.localeCompare(b.month));
   const chartRows = sortedRecords.map((record) => {
     const mealCard = calculateMealCard(
@@ -424,7 +548,7 @@ function IncomeCompositionChart({
     const categories = [
       {
         key: "frenchSalary",
-        label: "Salaire France",
+        label: t("Salaire France"),
         amount: record.frenchSalary,
         valueForBar: record.frenchSalary ?? 0,
         barClass: "bg-[#1f70cf]",
@@ -432,7 +556,7 @@ function IncomeCompositionChart({
       },
       {
         key: "ukBonus",
-        label: "Bonus UK",
+        label: t("Bonus UK"),
         amount: record.ukBonus,
         valueForBar: record.ukBonus ?? 0,
         barClass: "bg-[#0f8a5f]",
@@ -440,7 +564,7 @@ function IncomeCompositionChart({
       },
       {
         key: "otherReimbursement",
-        label: "Remb.",
+        label: t("Remb."),
         amount: record.otherReimbursement,
         valueForBar: record.otherReimbursement ?? 0,
         barClass: "bg-[#f97316]",
@@ -448,7 +572,7 @@ function IncomeCompositionChart({
       },
       {
         key: "mealCard",
-        label: "Titres resto",
+        label: t("Titres resto"),
         amount: mealCard,
         valueForBar: mealCard,
         barClass: "bg-[#8b3fa0]",
@@ -483,11 +607,11 @@ function IncomeCompositionChart({
         <div className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-clay" />
           <h2 className="text-xl font-semibold text-ink">
-            Composition mensuelle du revenu net
+            {t("Composition mensuelle du revenu net")}
           </h2>
         </div>
         <p className="mt-3 text-sm text-ink/65">
-          Aucun mois enregistré pour le moment.
+          {t("Aucun mois enregistré pour le moment.")}
         </p>
       </section>
     );
@@ -500,7 +624,7 @@ function IncomeCompositionChart({
           <div className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-clay" />
             <h2 className="text-xl font-semibold text-ink">
-              Composition mensuelle du revenu net
+              {t("Composition mensuelle du revenu net")}
             </h2>
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-ink/65">
@@ -527,10 +651,10 @@ function IncomeCompositionChart({
           >
             <div className="mb-4 text-center">
               <h3 className="text-lg font-semibold text-ink">
-                {formatMonthLabel(row.record.month)}
+                {formatMonthLabel(row.record.month, locale)}
               </h3>
               <p className="mt-1 text-sm font-medium text-ink/65">
-                {row.record.workDays} j | CA {formatCurrency(row.turnover)}
+                {row.record.workDays} {locale === "zh-CN" ? "天" : "j"} | {locale === "zh-CN" ? "营业额" : "CA"} {formatCurrency(row.turnover)}
               </p>
             </div>
 
@@ -555,7 +679,7 @@ function IncomeCompositionChart({
                       <div
                         aria-label={`${category.label} ${
                           category.amount === null
-                            ? "Non renseigné"
+                            ? t("Non renseigné")
                             : formatCurrency(category.amount)
                         }`}
                         className={`h-full ${category.barClass}`}
@@ -580,7 +704,7 @@ function IncomeCompositionChart({
             <div className="mt-4 border-t border-dashed border-ink/20 pt-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-semibold text-ink">
-                  Net reçu
+                  {t("Net reçu")}
                 </span>
                 <ActualReceivedValue
                   amount={row.actualReceived.amount}
@@ -602,6 +726,7 @@ function SummarySection({
   records: MonthlyIncome[];
   settings: IncomeSettings;
 }) {
+  const { language, locale, t } = useI18n();
   const summary = useMemo(() => {
     const annualRecords = records.filter((record) =>
       record.month.startsWith(`${summaryYear}-`)
@@ -652,39 +777,39 @@ function SummarySection({
     <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       <SummaryCard
         icon={CalendarDays}
-        label={`${summaryYear} jours travaillés`}
-        note="Total des jours travaillés saisis"
-        value={`${summary.workDays} j`}
+        label={language === "zh" ? `${summaryYear} 年${t("jours travaillés")}` : `${summaryYear} ${t("jours travaillés")}`}
+        note={t("Total des jours travaillés saisis")}
+        value={`${summary.workDays} ${language === "zh" ? "天" : "j"}`}
       />
       <SummaryCard
         icon={Landmark}
-        label="Chiffre d'affaires cumulé"
-        note="Jours travaillés × TJM du mois"
+        label={t("Chiffre d'affaires cumulé")}
+        note={t("Jours travaillés × TJM du mois")}
         tone="ink"
         value={formatCurrency(summary.turnover)}
       />
       <SummaryCard
         icon={ReceiptText}
-        label="Frais de gestion cumulés"
-        note={`${formatPercent(settings.managementFeeRate)} calculé automatiquement`}
+        label={t("Frais de gestion cumulés")}
+        note={`${formatPercent(settings.managementFeeRate, locale)} ${t("calculé automatiquement")}`}
         value={formatCurrency(summary.managementFee)}
       />
       <SummaryCard
         icon={CircleDollarSign}
-        label="Revenus salariaux saisis"
-        note="Salaire France et bonus UK renseignés"
+        label={t("Revenus salariaux saisis")}
+        note={t("Salaire France et bonus UK renseignés")}
         value={formatCurrency(summary.recordedSalary)}
       />
       <SummaryCard
         icon={WalletCards}
-        label="Remboursements saisis"
-        note="Remboursements hors titres resto renseignés"
+        label={t("Remboursements saisis")}
+        note={t("Remboursements hors titres resto renseignés")}
         value={formatCurrency(summary.recordedReimbursement)}
       />
       <SummaryCard
         icon={Save}
-        label="Net reçu complet"
-        note="Mois où salaire, bonus et remboursements sont complets"
+        label={t("Net reçu complet")}
+        note={t("Mois où salaire, bonus et remboursements sont complets")}
         tone="clay"
         value={formatCurrency(summary.completeReceived)}
       />
@@ -699,13 +824,14 @@ function AnnualIncomeDistributionChart({
   records: MonthlyIncome[];
   settings: IncomeSettings;
 }) {
+  const { t } = useI18n();
   const annualRecords = records.filter((record) =>
     record.month.startsWith(`${summaryYear}-`)
   );
   const categories = [
     {
       key: "frenchSalary",
-      label: "Salaire France",
+      label: t("Salaire France"),
       amount: annualRecords.reduce(
         (total, record) => total + (record.frenchSalary ?? 0),
         0
@@ -714,7 +840,7 @@ function AnnualIncomeDistributionChart({
     },
     {
       key: "ukBonus",
-      label: "Bonus UK",
+      label: t("Bonus UK"),
       amount: annualRecords.reduce(
         (total, record) => total + (record.ukBonus ?? 0),
         0
@@ -723,7 +849,7 @@ function AnnualIncomeDistributionChart({
     },
     {
       key: "otherReimbursement",
-      label: "Remboursements",
+      label: t("Remboursements"),
       amount: annualRecords.reduce(
         (total, record) => total + (record.otherReimbursement ?? 0),
         0
@@ -732,7 +858,7 @@ function AnnualIncomeDistributionChart({
     },
     {
       key: "mealCard",
-      label: "Titres resto",
+      label: t("Titres resto"),
       amount: annualRecords.reduce(
         (total, record) =>
           total +
@@ -757,7 +883,7 @@ function AnnualIncomeDistributionChart({
         <div className="flex items-center gap-2">
           <ChartPie className="h-5 w-5 text-clay" />
           <h2 className="text-xl font-semibold text-ink">
-            Répartition des revenus {summaryYear}
+            {t("Répartition des revenus")} {summaryYear}
           </h2>
         </div>
       </div>
@@ -772,10 +898,10 @@ function AnnualIncomeDistributionChart({
               viewBox="0 0 220 220"
             >
               <title id="annual-income-distribution-title">
-                Répartition des revenus {summaryYear}
+                {t("Répartition des revenus")} {summaryYear}
               </title>
               <desc id="annual-income-distribution-desc">
-                Répartition annuelle par salaire France, bonus UK, remboursements et titres resto.
+                {t("Répartition des revenus")} {summaryYear}
               </desc>
               <circle
                 cx="110"
@@ -809,7 +935,7 @@ function AnnualIncomeDistributionChart({
               })}
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-              <span className="text-sm font-medium text-ink/55">Total</span>
+              <span className="text-sm font-medium text-ink/55">{t("Total")}</span>
               <strong className="mt-1 text-2xl font-semibold text-ink">
                 {formatCurrency(total)}
               </strong>
@@ -872,6 +998,7 @@ function CalculationPreview({
   records: MonthlyIncome[];
   settings: IncomeSettings;
 }) {
+  const { language, t } = useI18n();
   const parsed = parseForm(values);
   const safeWorkDays = Number.isFinite(parsed.workDays) ? parsed.workDays : 0;
   const safeTjm = Number.isFinite(parsed.tjm) ? parsed.tjm : settings.defaultTjm;
@@ -902,23 +1029,23 @@ function CalculationPreview({
 
   const rows = [
     {
-      label: "Jours travaillés le mois précédent",
+      label: t("Jours travaillés le mois précédent"),
       value:
         mealCard.previousWorkDays === null ? (
-          <span className="text-clay">Mois précédent manquant</span>
+          <span className="text-clay">{t("Mois précédent manquant")}</span>
         ) : (
-          `${mealCard.previousWorkDays} j`
+          `${mealCard.previousWorkDays} ${language === "zh" ? "天" : "j"}`
         )
     },
-    { label: "Chiffre d'affaires", value: formatCurrency(turnover) },
-    { label: "Frais de gestion", value: formatCurrency(managementFee) },
-    { label: "Titres resto", value: formatCurrency(mealCard.amount) },
+    { label: t("Chiffre d'affaires"), value: formatCurrency(turnover) },
+    { label: t("Frais de gestion"), value: formatCurrency(managementFee) },
+    { label: t("Titres resto"), value: formatCurrency(mealCard.amount) },
     {
-      label: "Revenus salariaux",
+      label: t("Revenus salariaux"),
       value: salaryIncome === null ? <EmptyValue /> : formatCurrency(salaryIncome)
     },
     {
-      label: "Net reçu",
+      label: t("Net reçu"),
       value: (
         <ActualReceivedValue
           amount={actualReceived.amount}
@@ -932,7 +1059,7 @@ function CalculationPreview({
     <aside className="border-l-4 border-moss bg-[#edf0e4] p-5">
       <div className="mb-5 flex items-center gap-2">
         <FilePenLine className="h-5 w-5 text-moss" />
-        <h3 className="text-lg font-semibold text-ink">Calcul en temps réel</h3>
+        <h3 className="text-lg font-semibold text-ink">{t("Calcul en temps réel")}</h3>
       </div>
       <div className="space-y-3">
         {rows.map((row) => (
@@ -949,7 +1076,7 @@ function CalculationPreview({
       </div>
       {mealCard.missingPreviousMonth && parsed.month ? (
         <p className="mt-4 border border-clay/25 bg-[#fbf1e7] px-3 py-2 text-sm text-clay">
-          Aucun enregistrement trouvé pour {mealCard.previousMonth}. Les titres resto sont calculés à 0.
+          {language === "zh" ? `未找到 ${mealCard.previousMonth} 的记录，餐券按 0 计算。` : `Aucun enregistrement trouvé pour ${mealCard.previousMonth}. Les titres resto sont calculés à 0.`}
         </p>
       ) : null}
     </aside>
@@ -977,7 +1104,8 @@ function IncomeForm({
   onReset: () => void;
   onSubmit: () => void;
 }) {
-  const title = editingId ? "Modifier le mois" : "Ajouter un mois";
+  const { t } = useI18n();
+  const title = editingId ? t("Modifier le mois") : t("Ajouter un mois");
 
   return (
     <section className="ledger-panel grid overflow-hidden lg:grid-cols-[1fr_340px]">
@@ -991,7 +1119,7 @@ function IncomeForm({
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-clay">
-              {editingId ? "Modification en cours" : "Nouvel enregistrement"}
+              {editingId ? t("Modification en cours") : t("Nouvel enregistrement")}
             </p>
             <h2 className="mt-1 text-2xl font-semibold text-ink">{title}</h2>
           </div>
@@ -1003,14 +1131,14 @@ function IncomeForm({
               type="button"
             >
               <X className="h-4 w-4" />
-              Annuler
+              {t("Annuler")}
             </button>
           ) : null}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-2">
-            <span className="field-label">Mois</span>
+            <span className="field-label">{t("Mois")}</span>
             <input
               className="field-input"
               onChange={(event) => onChange("month", event.target.value)}
@@ -1019,7 +1147,7 @@ function IncomeForm({
             />
           </label>
           <label className="space-y-2">
-            <span className="field-label">Jours travaillés</span>
+            <span className="field-label">{t("Jours travaillés")}</span>
             <input
               className="field-input"
               min="0"
@@ -1031,7 +1159,7 @@ function IncomeForm({
             />
           </label>
           <label className="space-y-2">
-            <span className="field-label">TJM</span>
+            <span className="field-label">{t("TJM")}</span>
             <input
               className="field-input"
               min="0.01"
@@ -1042,49 +1170,49 @@ function IncomeForm({
             />
           </label>
           <label className="space-y-2">
-            <span className="field-label">Salaire France</span>
+            <span className="field-label">{t("Salaire France")}</span>
             <input
               className="field-input"
               min="0"
               onChange={(event) => onChange("frenchSalary", event.target.value)}
-              placeholder="Vide si non renseigné"
+              placeholder={t("Vide si non renseigné")}
               step="0.01"
               type="number"
               value={values.frenchSalary}
             />
           </label>
           <label className="space-y-2">
-            <span className="field-label">Bonus UK</span>
+            <span className="field-label">{t("Bonus UK")}</span>
             <input
               className="field-input"
               min="0"
               onChange={(event) => onChange("ukBonus", event.target.value)}
-              placeholder="Vide si non renseigné"
+              placeholder={t("Vide si non renseigné")}
               step="0.01"
               type="number"
               value={values.ukBonus}
             />
           </label>
           <label className="space-y-2">
-            <span className="field-label">Remboursements</span>
+            <span className="field-label">{t("Remboursements")}</span>
             <input
               className="field-input"
               min="0"
               onChange={(event) =>
                 onChange("otherReimbursement", event.target.value)
               }
-              placeholder="Hors titres resto"
+              placeholder={t("Hors titres resto")}
               step="0.01"
               type="number"
               value={values.otherReimbursement}
             />
           </label>
           <label className="space-y-2 sm:col-span-2">
-            <span className="field-label">Note</span>
+            <span className="field-label">{t("Note")}</span>
             <textarea
               className="field-input min-h-24 resize-y"
               onChange={(event) => onChange("note", event.target.value)}
-              placeholder="Ex. beaucoup de jours fériés, congés, aucun congé"
+              placeholder={t("Ex. beaucoup de jours fériés, congés, aucun congé")}
               value={values.note}
             />
           </label>
@@ -1103,7 +1231,7 @@ function IncomeForm({
             type="submit"
           >
             <Save className="h-4 w-4" />
-            Enregistrer
+            {t("Enregistrer")}
           </button>
           <button
             className="inline-flex items-center gap-2 border border-ink/20 px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-clay hover:text-clay"
@@ -1112,7 +1240,7 @@ function IncomeForm({
             type="button"
           >
             <RotateCcw className="h-4 w-4" />
-            Réinitialiser
+            {t("Réinitialiser")}
           </button>
         </div>
       </form>
@@ -1132,35 +1260,36 @@ function IncomeTable({
   onEdit: (record: MonthlyIncome) => void;
   onDelete: (record: MonthlyIncome) => void;
 }) {
+  const { language, t } = useI18n();
   return (
     <section className="ledger-panel overflow-hidden">
       <div className="border-b border-ink/15 px-5 py-4 md:px-6">
         <div className="flex items-center gap-2">
           <ReceiptText className="h-5 w-5 text-clay" />
-          <h2 className="text-xl font-semibold text-ink">Enregistrements mensuels</h2>
+          <h2 className="text-xl font-semibold text-ink">{t("Enregistrements mensuels")}</h2>
         </div>
       </div>
       <div className="hidden overflow-x-auto lg:block">
         {records.length === 0 ? (
           <p className="bg-[#fbf8f0] px-5 py-8 text-sm text-ink/65 md:px-6">
-            Aucun mois enregistré pour le moment.
+            {t("Aucun mois enregistré pour le moment.")}
           </p>
         ) : (
           <table className="w-full border-collapse text-left text-sm">
           <thead className="bg-[#e8dfce] text-xs uppercase text-ink/65">
             <tr>
-              <th className="px-4 py-3">Mois</th>
-              <th className="px-4 py-3">Jours</th>
-              <th className="px-4 py-3">TJM</th>
+              <th className="px-4 py-3">{t("Mois")}</th>
+              <th className="px-4 py-3">{t("Jours")}</th>
+              <th className="px-4 py-3">{t("TJM")}</th>
               <th className="px-4 py-3">CA</th>
-              <th className="px-4 py-3">Frais</th>
-              <th className="px-4 py-3">Salaire FR</th>
-              <th className="px-4 py-3">Bonus UK</th>
-              <th className="px-4 py-3">Titres resto</th>
-              <th className="px-4 py-3">Remb.</th>
-              <th className="px-4 py-3">Net reçu</th>
-              <th className="px-4 py-3">Note</th>
-              <th className="px-4 py-3">Actions</th>
+              <th className="px-4 py-3">{t("Frais")}</th>
+              <th className="px-4 py-3">{t("Salaire FR")}</th>
+              <th className="px-4 py-3">{t("Bonus UK")}</th>
+              <th className="px-4 py-3">{t("Titres resto")}</th>
+              <th className="px-4 py-3">{t("Remb.")}</th>
+              <th className="px-4 py-3">{t("Net reçu")}</th>
+              <th className="px-4 py-3">{t("Note")}</th>
+              <th className="px-4 py-3">{t("Actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -1186,7 +1315,7 @@ function IncomeTable({
                   <td className="whitespace-nowrap px-4 py-4 font-semibold">
                     {record.month}
                   </td>
-                  <td className="px-4 py-4">{record.workDays} j</td>
+                  <td className="px-4 py-4">{record.workDays} {language === "zh" ? "天" : "j"}</td>
                   <td className="px-4 py-4">{formatCurrency(record.tjm)}</td>
                   <td className="px-4 py-4 font-medium">
                     {formatCurrency(turnover)}
@@ -1206,7 +1335,7 @@ function IncomeTable({
                     <div className="font-medium">{formatCurrency(mealCard.amount)}</div>
                     {mealCard.missingPreviousMonth ? (
                       <div className="mt-1 text-xs text-clay">
-                        Mois précédent manquant
+                        {t("Mois précédent manquant")}
                       </div>
                     ) : null}
                   </td>
@@ -1225,7 +1354,7 @@ function IncomeTable({
                   <td className="px-4 py-4">
                     <div className="flex gap-2">
                       <button
-                        aria-label={`Modifier ${record.month}`}
+                        aria-label={`${t("Modifier")} ${record.month}`}
                         className="inline-flex h-9 w-9 items-center justify-center border border-ink/20 text-ink transition hover:border-moss hover:bg-moss hover:text-paper"
                         onClick={() => onEdit(record)}
                         style={{ borderRadius: 6 }}
@@ -1234,7 +1363,7 @@ function IncomeTable({
                         <Edit3 className="h-4 w-4" />
                       </button>
                       <button
-                        aria-label={`Supprimer ${record.month}`}
+                        aria-label={`${t("Supprimer")} ${record.month}`}
                         className="inline-flex h-9 w-9 items-center justify-center border border-clay/35 text-clay transition hover:bg-clay hover:text-paper"
                         onClick={() => onDelete(record)}
                         style={{ borderRadius: 6 }}
@@ -1254,7 +1383,7 @@ function IncomeTable({
       <div className="grid gap-3 p-4 lg:hidden">
         {records.length === 0 ? (
           <p className="text-sm text-ink/65">
-            Aucun mois enregistré pour le moment.
+            {t("Aucun mois enregistré pour le moment.")}
           </p>
         ) : (
           sortRecordsDesc(records).map((record) => (
@@ -1301,6 +1430,7 @@ function IncomeMobileCard({
   onEdit: (record: MonthlyIncome) => void;
   onDelete: (record: MonthlyIncome) => void;
 }) {
+  const { language, t } = useI18n();
   const turnover = calculateTurnover(record.workDays, record.tjm);
   const mealCard = calculateMealCard(
     record.month,
@@ -1321,12 +1451,12 @@ function IncomeMobileCard({
     >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium text-clay">Mois</p>
+          <p className="text-xs font-medium text-clay">{t("Mois")}</p>
           <h3 className="text-xl font-semibold text-ink">{record.month}</h3>
         </div>
         <div className="flex gap-2">
           <button
-            aria-label={`Modifier ${record.month}`}
+            aria-label={`${t("Modifier")} ${record.month}`}
             className="inline-flex h-9 w-9 items-center justify-center border border-ink/20 text-ink"
             onClick={() => onEdit(record)}
             style={{ borderRadius: 6 }}
@@ -1335,7 +1465,7 @@ function IncomeMobileCard({
             <Edit3 className="h-4 w-4" />
           </button>
           <button
-            aria-label={`Supprimer ${record.month}`}
+            aria-label={`${t("Supprimer")} ${record.month}`}
             className="inline-flex h-9 w-9 items-center justify-center border border-clay/35 text-clay"
             onClick={() => onDelete(record)}
             style={{ borderRadius: 6 }}
@@ -1346,33 +1476,33 @@ function IncomeMobileCard({
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <MobileMetric label="Jours travaillés">{record.workDays} j</MobileMetric>
-        <MobileMetric label="TJM">{formatCurrency(record.tjm)}</MobileMetric>
-        <MobileMetric label="Chiffre d'affaires">{formatCurrency(turnover)}</MobileMetric>
-        <MobileMetric label="Frais de gestion">
+        <MobileMetric label={t("Jours travaillés")}>{record.workDays} {language === "zh" ? "天" : "j"}</MobileMetric>
+        <MobileMetric label={t("TJM")}>{formatCurrency(record.tjm)}</MobileMetric>
+        <MobileMetric label={t("Chiffre d'affaires")}>{formatCurrency(turnover)}</MobileMetric>
+        <MobileMetric label={t("Frais de gestion")}>
           {formatCurrency(
             calculateManagementFee(turnover, settings.managementFeeRate)
           )}
         </MobileMetric>
-        <MobileMetric label="Salaire France">
+        <MobileMetric label={t("Salaire France")}>
           {formatOptionalCurrency(record.frenchSalary)}
         </MobileMetric>
-        <MobileMetric label="Bonus UK">
+        <MobileMetric label={t("Bonus UK")}>
           {formatOptionalCurrency(record.ukBonus)}
         </MobileMetric>
-        <MobileMetric label="Titres resto">
+        <MobileMetric label={t("Titres resto")}>
           {formatCurrency(mealCard.amount)}
           {mealCard.missingPreviousMonth ? (
             <span className="mt-1 block text-xs font-medium text-clay">
-              Mois précédent manquant
+              {t("Mois précédent manquant")}
             </span>
           ) : null}
         </MobileMetric>
-        <MobileMetric label="Remboursements">
+        <MobileMetric label={t("Remboursements")}>
           {formatOptionalCurrency(record.otherReimbursement)}
         </MobileMetric>
         <div className="col-span-2">
-          <MobileMetric label="Note">
+          <MobileMetric label={t("Note")}>
             {record.note ? (
               <span className="font-medium text-ink/75">{record.note}</span>
             ) : (
@@ -1381,7 +1511,7 @@ function IncomeMobileCard({
           </MobileMetric>
         </div>
         <div className="col-span-2">
-          <MobileMetric label="Net reçu">
+          <MobileMetric label={t("Net reçu")}>
             <ActualReceivedValue
               amount={actualReceived.amount}
               complete={actualReceived.complete}
@@ -1393,7 +1523,8 @@ function IncomeMobileCard({
   );
 }
 
-export function IncomeDashboard() {
+function IncomeDashboardContent() {
+  const { language, t } = useI18n();
   const [records, setRecords] = useState<MonthlyIncome[]>([]);
   const [settings, setSettings] =
     useState<IncomeSettings>(defaultIncomeSettings);
@@ -1501,7 +1632,7 @@ export function IncomeDashboard() {
     setAuthMessage("");
 
     if (!authEmail.trim() || !authPassword) {
-      setAuthError("Email et mot de passe sont obligatoires.");
+      setAuthError(language === "zh" ? "邮箱和密码为必填项。" : "Email et mot de passe sont obligatoires.");
       return;
     }
 
@@ -1518,14 +1649,14 @@ export function IncomeDashboard() {
         await loadCloudData(session.user.id);
       } else {
         setAuthMessage(
-          "Compte créé. Vérifiez votre email si Supabase demande une confirmation."
+          language === "zh" ? "账户已创建。如 Supabase 要求验证，请检查您的邮箱。" : "Compte créé. Vérifiez votre email si Supabase demande une confirmation."
         );
       }
     } catch (authErrorValue) {
       setAuthError(
         authErrorValue instanceof Error
           ? authErrorValue.message
-          : "Impossible de se connecter."
+          : language === "zh" ? "无法登录。" : "Impossible de se connecter."
       );
     } finally {
       setIsAuthLoading(false);
@@ -1542,7 +1673,7 @@ export function IncomeDashboard() {
       setSyncMessage(
         signOutError instanceof Error
           ? signOutError.message
-          : "Impossible de se déconnecter."
+          : language === "zh" ? "无法退出登录。" : "Impossible de se déconnecter."
       );
     }
   }
@@ -1574,21 +1705,21 @@ export function IncomeDashboard() {
 
   function validateSettingsForm(parsed: ParsedSettingsForm) {
     if (!Number.isFinite(parsed.defaultTjm) || parsed.defaultTjm <= 0) {
-      return "Le TJM par défaut doit être supérieur à 0.";
+      return language === "zh" ? "默认日费率必须大于 0。" : "Le TJM par défaut doit être supérieur à 0.";
     }
 
     if (
       !Number.isFinite(parsed.managementFeeRate) ||
       parsed.managementFeeRate < 0
     ) {
-      return "Le taux des frais de gestion ne peut pas être négatif.";
+      return language === "zh" ? "管理费率不能为负数。" : "Le taux des frais de gestion ne peut pas être négatif.";
     }
 
     if (
       !Number.isFinite(parsed.mealCardDailyAmount) ||
       parsed.mealCardDailyAmount < 0
     ) {
-      return "Le montant des titres resto ne peut pas être négatif.";
+      return language === "zh" ? "餐券金额不能为负数。" : "Le montant des titres resto ne peut pas être négatif.";
     }
 
     return "";
@@ -1615,7 +1746,7 @@ export function IncomeDashboard() {
     setSettingsError("");
 
     if (!user) {
-      setSettingsError("Vous devez être connecté pour enregistrer les paramètres.");
+      setSettingsError(language === "zh" ? "您需要登录后才能保存设置。" : "Vous devez être connecté pour enregistrer les paramètres.");
       return;
     }
 
@@ -1625,7 +1756,7 @@ export function IncomeDashboard() {
       setSettingsError(
         settingsSaveError instanceof Error
           ? settingsSaveError.message
-          : "Impossible d'enregistrer les paramètres."
+          : language === "zh" ? "无法保存设置。" : "Impossible d'enregistrer les paramètres."
       );
       return;
     }
@@ -1643,19 +1774,19 @@ export function IncomeDashboard() {
 
   function validateForm(parsed: ParsedForm) {
     if (!isMonthValue(parsed.month)) {
-      return "Le mois est obligatoire. Utilisez le format YYYY-MM.";
+      return language === "zh" ? "月份为必填项，请使用 YYYY-MM 格式。" : "Le mois est obligatoire. Utilisez le format YYYY-MM.";
     }
 
     if (!Number.isFinite(parsed.workDays) || parsed.workDays < 0) {
-      return "Le nombre de jours travaillés doit être supérieur ou égal à 0.";
+      return language === "zh" ? "工作天数必须大于或等于 0。" : "Le nombre de jours travaillés doit être supérieur ou égal à 0.";
     }
 
     if (!Number.isInteger(parsed.workDays)) {
-      return "Le nombre de jours travaillés doit être un entier.";
+      return language === "zh" ? "工作天数必须是整数。" : "Le nombre de jours travaillés doit être un entier.";
     }
 
     if (!Number.isFinite(parsed.tjm) || parsed.tjm <= 0) {
-      return "Le TJM doit être supérieur à 0.";
+      return language === "zh" ? "日费率必须大于 0。" : "Le TJM doit être supérieur à 0.";
     }
 
     if (
@@ -1663,7 +1794,7 @@ export function IncomeDashboard() {
       !isValidOptionalAmount(parsed.ukBonus) ||
       !isValidOptionalAmount(parsed.otherReimbursement)
     ) {
-      return "Le salaire, le bonus et les remboursements ne peuvent pas être négatifs.";
+      return language === "zh" ? "工资、奖金和报销不能为负数。" : "Le salaire, le bonus et les remboursements ne peuvent pas être négatifs.";
     }
 
     const duplicateRecord = records.find(
@@ -1671,7 +1802,7 @@ export function IncomeDashboard() {
     );
 
     if (duplicateRecord) {
-      return "Ce mois existe déjà. Utilisez le bouton modifier sur l'enregistrement existant.";
+      return language === "zh" ? "该月份已存在，请使用现有记录的修改按钮。" : "Ce mois existe déjà. Utilisez le bouton modifier sur l'enregistrement existant.";
     }
 
     return "";
@@ -1708,7 +1839,7 @@ export function IncomeDashboard() {
     commitRecords(nextRecords);
 
     if (!user) {
-      setError("Vous devez être connecté pour enregistrer un mois.");
+      setError(language === "zh" ? "您需要登录后才能保存月度记录。" : "Vous devez être connecté pour enregistrer un mois.");
       return;
     }
 
@@ -1718,7 +1849,7 @@ export function IncomeDashboard() {
       setError(
         recordSaveError instanceof Error
           ? recordSaveError.message
-          : "Impossible d'enregistrer le mois."
+          : language === "zh" ? "无法保存月度记录。" : "Impossible d'enregistrer le mois."
       );
       return;
     }
@@ -1734,7 +1865,7 @@ export function IncomeDashboard() {
   }
 
   async function deleteRecord(record: MonthlyIncome) {
-    const confirmed = window.confirm(`Supprimer l'enregistrement ${record.month} ?`);
+    const confirmed = window.confirm(language === "zh" ? `确定删除 ${record.month} 的记录吗？` : `Supprimer l'enregistrement ${record.month} ?`);
 
     if (!confirmed) {
       return;
@@ -1744,7 +1875,7 @@ export function IncomeDashboard() {
     commitRecords(nextRecords);
 
     if (!user) {
-      setSyncMessage("Vous devez être connecté pour supprimer un mois.");
+      setSyncMessage(language === "zh" ? "您需要登录后才能删除月度记录。" : "Vous devez être connecté pour supprimer un mois.");
       return;
     }
 
@@ -1754,7 +1885,7 @@ export function IncomeDashboard() {
       setSyncMessage(
         deleteError instanceof Error
           ? deleteError.message
-          : "Impossible de supprimer le mois."
+          : language === "zh" ? "无法删除月度记录。" : "Impossible de supprimer le mois."
       );
     }
 
@@ -1767,7 +1898,7 @@ export function IncomeDashboard() {
     return (
       <main className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-5 text-ink">
         <p className="border border-ink/15 bg-[#fbf8f0] px-5 py-3 text-sm font-medium">
-          Chargement des données…
+          {t("Chargement des données…")}
         </p>
       </main>
     );
@@ -1777,15 +1908,18 @@ export function IncomeDashboard() {
     return (
       <main className="mx-auto flex min-h-screen max-w-3xl items-center px-4 py-10 text-ink">
         <section className="ledger-panel w-full p-6 md:p-8">
+          <div className="mb-5 flex justify-end"><LanguageSwitcher /></div>
           <p className="mb-3 inline-flex items-center gap-2 border border-clay/30 bg-[#f2dfcf] px-3 py-1 text-sm font-semibold text-clay">
             <WalletCards className="h-4 w-4" />
-            Configuration requise
+            {t("Configuration requise")}
           </p>
           <h1 className="text-3xl font-semibold md:text-5xl">
-            Supabase doit être configuré
+            {t("Supabase doit être configuré")}
           </h1>
           <p className="mt-4 text-base leading-7 text-ink/70">
-            {configurationError}
+            {language === "zh"
+              ? "Supabase 尚未配置。请添加 NEXT_PUBLIC_SUPABASE_URL 和 NEXT_PUBLIC_SUPABASE_ANON_KEY。"
+              : configurationError}
           </p>
         </section>
       </main>
@@ -1811,17 +1945,18 @@ export function IncomeDashboard() {
 
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-4 py-6 md:px-8 md:py-10">
+      <div className="mb-5 flex justify-end"><LanguageSwitcher /></div>
       <header className="mb-7 grid gap-5 border-b border-ink/15 pb-7 lg:grid-cols-[1fr_auto] lg:items-end">
         <div>
           <p className="mb-3 inline-flex items-center gap-2 border border-clay/30 bg-[#f2dfcf] px-3 py-1 text-sm font-semibold text-clay">
             <WalletCards className="h-4 w-4" />
-            Carnet personnel de portage
+            {t("Carnet personnel de portage")}
           </p>
           <h1 className="max-w-3xl text-4xl font-semibold leading-tight text-ink md:text-6xl">
-            Suivi des revenus en portage
+            {t("Suivi des revenus en portage")}
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-ink/68 md:text-lg">
-            Suivez les jours travaillés, le chiffre d&apos;affaires et le net reçu chaque mois.
+            {t("Suivez les jours travaillés, le chiffre d'affaires et le net reçu chaque mois.")}
           </p>
         </div>
         <div className="grid gap-3">
@@ -1832,7 +1967,7 @@ export function IncomeDashboard() {
             values={settingsFormValues}
           />
           <div className="border border-ink/15 bg-[#f8f5ec] p-4 text-sm text-ink">
-            <p className="font-semibold text-moss">Synchronisation active</p>
+            <p className="font-semibold text-moss">{t("Synchronisation active")}</p>
             <p className="mt-1 break-all text-ink/65">{user.email}</p>
             {syncMessage ? (
               <p className="mt-3 text-sm font-medium text-clay">
@@ -1846,7 +1981,7 @@ export function IncomeDashboard() {
               type="button"
             >
               <LogOut className="h-4 w-4" />
-              Déconnexion
+              {t("Déconnexion")}
             </button>
           </div>
         </div>
@@ -1854,7 +1989,7 @@ export function IncomeDashboard() {
 
       <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase text-ink/55">
         <Plus className="h-4 w-4" />
-        Vue annuelle
+        {t("Vue annuelle")}
       </div>
       <SummarySection records={records} settings={settings} />
 
@@ -1889,5 +2024,39 @@ export function IncomeDashboard() {
         />
       </div>
     </main>
+  );
+}
+
+export function IncomeDashboard() {
+  const [language, setLanguage] = useState<Language>("fr");
+
+  useEffect(() => {
+    const savedLanguage = window.localStorage.getItem("income-dashboard-language");
+    if (savedLanguage === "fr" || savedLanguage === "zh") {
+      setLanguage(savedLanguage);
+    }
+  }, []);
+
+  function changeLanguage(nextLanguage: Language) {
+    setLanguage(nextLanguage);
+    window.localStorage.setItem("income-dashboard-language", nextLanguage);
+  }
+
+  useEffect(() => {
+    document.documentElement.lang = language === "zh" ? "zh-CN" : "fr";
+    document.title = language === "zh" ? "自由职业收入记账" : "Suivi des revenus en portage";
+  }, [language]);
+
+  const contextValue = useMemo<I18nContextValue>(() => ({
+    language,
+    locale: language === "zh" ? "zh-CN" : "fr-FR",
+    setLanguage: changeLanguage,
+    t: (text) => language === "zh" ? (zh[text] ?? text) : text
+  }), [language]);
+
+  return (
+    <I18nContext.Provider value={contextValue}>
+      <IncomeDashboardContent />
+    </I18nContext.Provider>
   );
 }
